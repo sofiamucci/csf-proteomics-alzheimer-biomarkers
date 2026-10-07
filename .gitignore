@@ -1,7 +1,7 @@
-   data/raw/
-   .Rproj.user/
-   .Rhistory
-   .RData
-   renv/library/
-   *_files/
-   *.html
+data/raw/
+.Rproj.user/
+.Rhistory
+.RData
+renv/library/
+*_files/
+*.html
