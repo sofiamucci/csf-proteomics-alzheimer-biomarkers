@@ -20,8 +20,8 @@ pg_raw <- read_csv(in_file, na = c("", "NA", "Filtered"), show_col_types = FALSE
 
 # ---- Split annotation and quantities -----------------------------------------
 protein <- select(pg_raw, starts_with("PG."))
-quant   <- select(pg_raw, ends_with("PG.Quantity"))
-stopifnot(ncol(protein) + ncol(quant) == ncol(pg_raw))
+quant   <- select(pg_raw, ends_with("PG.Quantity")) # 1542 3
+stopifnot(ncol(protein) + ncol(quant) == ncol(pg_raw)) # 1542 210
 
 # ---- Run names ----------------------------------------------------------------
 run_names <- names(quant) |>
