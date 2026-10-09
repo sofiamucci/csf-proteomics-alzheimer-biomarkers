@@ -5,3 +5,4 @@ data/raw/
 renv/library/
 *_files/
 *.html
+data/processed/
