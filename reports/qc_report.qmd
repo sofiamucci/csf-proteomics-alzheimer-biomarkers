@@ -240,3 +240,113 @@ run_qc |>
   head(10) |>
   knitr::kable()
 ```
+
+## Principal component analysis
+
+PCA on the `r sum(complete)` protein groups quantified in every run (no
+imputation), each scaled to unit variance.
+
+```{r}
+#| label: pca
+pca      <- prcomp(t(X[complete, ]), center = TRUE, scale. = TRUE)
+var_expl <- 100 * pca$sdev^2 / sum(pca$sdev^2)
+run_qc   <- run_qc |>
+  mutate(PC1 = pca$x[, 1], PC2 = pca$x[, 2], PC3 = pca$x[, 3])
+
+pc_lab <- function(k) sprintf("PC%d (%.1f%%)", k, var_expl[k])
+```
+
+```{r}
+#| label: fig-pca-batch
+#| fig-cap: "PC1 vs PC2, by MS batch."
+ggplot(run_qc, aes(PC1, PC2, colour = batch, shape = batch)) +
+  geom_point(size = 2.2, alpha = 0.85) +
+  scale_colour_manual(values = batch_cols) +
+  labs(x = pc_lab(1), y = pc_lab(2), colour = "MS batch", shape = "MS batch")
+```
+
+```{r}
+#| label: fig-pca-group
+#| fig-cap: "PC1 vs PC2, by diagnosis."
+ggplot(run_qc, aes(PC1, PC2, colour = group, shape = group)) +
+  geom_point(size = 2.2, alpha = 0.85) +
+  scale_colour_manual(values = c(control = "#2a78d6", AD = "#eb6834")) +
+  labs(x = pc_lab(1), y = pc_lab(2), colour = "Diagnosis", shape = "Diagnosis")
+```
+
+```{r}
+#| label: fig-pca-ery
+#| fig-cap: "PC1 vs PC2, coloured by erythrocyte contamination score."
+ggplot(run_qc, aes(PC1, PC2, colour = ery_score)) +
+  geom_point(size = 2.2, alpha = 0.9) +
+  scale_colour_gradient(low = "#cde2fb", high = "#104281") +
+  labs(x = pc_lab(1), y = pc_lab(2), colour = "Erythrocyte\nscore")
+```
+
+```{r}
+#| label: tbl-pca-assoc
+#| tbl-cap: "Variance of each principal component explained by each covariate (R² of a linear model)."
+covars <- c("batch", "group", "age", "sex", "ery_score", "frac_missing")
+assoc  <- sapply(covars, function(v)
+  sapply(1:5, function(k) summary(lm(pca$x[, k] ~ run_qc[[v]]))$r.squared))
+dimnames(assoc) <- list(sapply(1:5, pc_lab), covars)
+knitr::kable(round(assoc, 2))
+```
+
+### PC1: brain-derived vs plasma-derived proteins
+
+```{r}
+#| label: tbl-pc1-loadings
+#| tbl-cap: "Protein groups with the largest PC1 loadings at each end."
+genes_complete <- dat$protein$PG.Genes[complete]
+load1 <- pca$rotation[, 1]
+data.frame(
+  negative = head(genes_complete[order(load1)], 15),
+  positive = head(genes_complete[order(-load1)], 15)
+) |> knitr::kable()
+```
+
+One end of PC1 is formed by neuronal and neural extracellular-matrix proteins
+(neurexins, NRCAM, NCAN), the other by liver- and immune-derived plasma
+proteins (apolipoproteins, complement, protease inhibitors). PC1 therefore
+reflects the balance between brain-derived and plasma-derived protein in CSF,
+which depends largely on blood–CSF barrier permeability. PC1 is correlated
+with the overall intensity level of each run
+(r = `r round(cor(run_qc$PC1, run_qc$median_complete), 2)`) and partly
+associated with diagnosis.
+
+```{r}
+#| label: plasma-score
+plasma_panel <- c("ALB", "TF", "HPX", "SERPINA1", "AHSG", "APOA1", "GC", "PLG", "F2", "HP")
+in_plasma    <- vapply(gene_list, function(g) any(g %in% plasma_panel), logical(1))
+run_qc$plasma_score <- colMeans(t(scale(t(X[in_plasma, ]))), na.rm = TRUE)
+```
+
+A plasma-protein score is computed as for the erythrocyte score, from
+`r sum(in_plasma)` protein groups of `r length(plasma_panel)` classic plasma
+proteins. Its correlation with PC1 is
+`r round(cor(run_qc$PC1, run_qc$plasma_score), 2)`; its correlation with the
+erythrocyte score is `r round(cor(run_qc$ery_score, run_qc$plasma_score), 2)`.
+
+```{r}
+#| label: tbl-pca-outliers
+#| tbl-cap: "Runs farthest from the centre of the PC1–PC2 plane (distance in units of each component's SD)."
+run_qc |>
+  mutate(pc_dist = sqrt((PC1 / sd(PC1))^2 + (PC2 / sd(PC2))^2)) |>
+  arrange(desc(pc_dist)) |>
+  transmute(run = substring(run, pmax(1, nchar(run) - 29)), batch, group, age,
+            PC1 = round(PC1, 1), PC2 = round(PC2, 1),
+            plasma_score = round(plasma_score, 2), ery_score = round(ery_score, 2),
+            `% missing` = round(100 * frac_missing, 1)) |>
+  head(6) |>
+  knitr::kable()
+```
+
+The most distant runs lie at the plasma-rich end of PC1 and have normal
+erythrocyte scores: they reflect plasma protein entering CSF, not blood
+contamination at puncture. They are retained, since excluding them would bias
+the cohort towards individuals with an intact barrier. PC1 is not used as a
+covariate, because it carries part of the disease signal. The plasma score is
+used in a sensitivity analysis: candidate biomarkers that lose their
+association with diagnosis after adjusting for it are reported as possibly
+reflecting barrier permeability.
