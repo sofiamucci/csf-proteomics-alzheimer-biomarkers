@@ -65,6 +65,49 @@ Because the biochemical classification is derived from CSF tau and Aβ, the
 association of MAPT with diagnosis is partly circular and is used as a
 pipeline check rather than as a finding.
 
+## Sample Quality Control
+
+`scripts/03_sample_qc.R` computes per-run metrics, contamination scores and
+flags on the 197 retained runs; `reports/qc_report.qmd` displays and models
+them. Comparisons between runs use the 385 protein groups quantified in every
+run, because medians of observed values are inflated in runs with more missing
+values (r = 0.85 between missing fraction and observed median, vs. −0.12 on
+complete protein groups).
+
+**Normalization.** Spectronaut's Local Normalization was retained. Residual
+batch offsets on complete protein groups (−0.18 and −0.23 log2 relative to the
+Swedish batch) are modelled as a covariate in limma rather than removed by
+renormalization, because per-run medians also showed a small association with
+diagnosis (+0.03 log2, 95% CI −0.004 to 0.068) that run-level centering would
+remove. A renormalized analysis is reported as a sensitivity check.
+
+**Missing values.** The fraction of missing values per run is lower in AD than
+in controls (−3.5 percentage points, p = 4 × 10⁻⁵) after adjusting for batch and
+age. Missingness is therefore not independent of the contrast of interest,
+which rules out both left-censored imputation and analysis of observed values
+only.
+
+**Low coverage.** Five runs quantify fewer protein groups than their batch
+median minus 3 MAD. Three are young Kiel controls (20–47 years), measured in a
+batch dominated by older Magdeburg samples; none show reduced intensity of
+abundant proteins. All are retained, with sample quality weights estimated in
+limma (`arrayWeights`).
+
+**Blood contamination.** An erythrocyte score (mean z-score of nine
+erythrocyte-specific proteins; Geyer et al., 2019) does not differ by
+diagnosis (p = 0.89). Four runs exceed median + 3 MAD, all controls; they are
+retained in the main analysis and removed in a sensitivity analysis. Protein
+groups correlated with the score are flagged in the results.
+
+**Global structure.** PCA on the complete protein groups (unit variance) shows
+batch dominating PC2–PC4. PC1 (24% of variance) contrasts neuronal and neural
+matrix proteins with liver- and immune-derived plasma proteins, consistent with
+blood–CSF barrier permeability; it is partly associated with diagnosis
+(R² = 0.11). The runs most distant in PCA are plasma-rich with normal
+erythrocyte scores and are retained. PC1 is not used as a covariate, as it
+carries disease signal; a plasma-protein score is used in a sensitivity
+analysis instead.
+
 ## Software Environment
 
 R 4.6.1 is installed in a dedicated conda environment (`environment.yml`,
