@@ -1,0 +1,123 @@
+---
+title: "QC report: CSF proteome (PXD016278)"
+format:
+  html:
+    embed-resources: true
+    toc: true
+    fig-width: 7
+    fig-height: 4
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+dat  <- readRDS("../data/processed/02_annotate.rds")
+keep <- !dat$sample$excluded
+X    <- log2(dat$intensity[, keep])
+smp  <- dat$sample[keep, ]
+
+complete <- rowSums(is.na(X)) == 0
+
+run_qc <- smp |>
+  select(run, batch, site, group, age, sex) |>
+  mutate(
+    n_quantified    = colSums(!is.na(X)),
+    frac_missing    = colMeans(is.na(X)),
+    median_observed = apply(X, 2, median, na.rm = TRUE),
+    median_complete = apply(X[complete, ], 2, median)
+  )
+
+# Categorical palette validated for colour-vision deficiency; batch is also
+# encoded by shape and axis labels, so colour never carries identity alone
+batch_cols <- setNames(c("#2a78d6", "#eb6834", "#1baf7a"), levels(smp$batch))
+
+theme_set(
+  theme_minimal(base_size = 11) +
+    theme(panel.grid.minor = element_blank(), legend.position = "top")
+)
+```
+
+Runs excluded by the authors (`r sum(!keep)`) are not shown; `r ncol(X)` runs
+and `r nrow(X)` protein groups remain. `r sum(complete)` protein groups are
+quantified in every run.
+
+## Run-level summary
+
+```{r}
+#| label: tbl-batch
+#| tbl-cap: "Run-level metrics by MS batch (mean across runs)."
+run_qc |>
+  group_by(batch) |>
+  summarise(
+    runs                 = n(),
+    sites                = paste(unique(site), collapse = ", "),
+    `proteins quantified` = round(mean(n_quantified)),
+    `% missing`          = round(100 * mean(frac_missing), 1),
+    `median log2 (observed)` = round(mean(median_observed), 2),
+    `median log2 (complete)` = round(mean(median_complete), 2)
+  ) |>
+  knitr::kable()
+```
+
+## Proteins quantified per run
+
+```{r}
+#| label: fig-nquant
+#| fig-cap: "Protein groups quantified per run, by MS batch."
+ggplot(run_qc, aes(batch, n_quantified, colour = batch, shape = batch)) +
+  geom_boxplot(outlier.shape = NA, width = 0.5, colour = "grey55") +
+  geom_jitter(width = 0.15, size = 2.2, alpha = 0.8) +
+  scale_colour_manual(values = batch_cols) +
+  labs(x = "MS batch", y = "Protein groups quantified") +
+  theme(legend.position = "none")
+```
+
+## Missing values bias the median of observed intensities
+
+Spectronaut's Local Normalization was applied across all runs. A per-run median
+computed on observed values alone is inflated in runs with more missing values,
+because missing values concentrate in low-abundance proteins.
+
+```{r}
+#| label: fig-median-vs-missing
+#| fig-cap: "Per-run median log2 intensity of observed values against the fraction of missing values."
+ggplot(run_qc, aes(frac_missing, median_observed, colour = batch, shape = batch)) +
+  geom_point(size = 2.4, alpha = 0.85) +
+  scale_colour_manual(values = batch_cols) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(x = "Missing values in run", y = "Median log2 intensity (observed)",
+       colour = "MS batch", shape = "MS batch")
+```
+
+Correlation between missing fraction and median:
+`r round(cor(run_qc$frac_missing, run_qc$median_observed), 2)` using observed
+values, `r round(cor(run_qc$frac_missing, run_qc$median_complete), 2)` using
+only the `r sum(complete)` complete protein groups.
+
+## Batch offset after removing the missingness effect
+
+```{r}
+#| label: fig-median-batch
+#| fig-cap: "Per-run median log2 intensity by MS batch, on all observed values and on complete protein groups only."
+run_qc |>
+  pivot_longer(c(median_observed, median_complete),
+               names_to = "set", values_to = "median") |>
+  mutate(set = factor(set,
+                      levels = c("median_observed", "median_complete"),
+                      labels = c("All observed values",
+                                 paste0("Complete protein groups (n = ", sum(complete), ")")))) |>
+  ggplot(aes(batch, median, colour = batch, shape = batch)) +
+  geom_boxplot(outlier.shape = NA, width = 0.5, colour = "grey55") +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.8) +
+  facet_wrap(~ set, scales = "free_y") +
+  scale_colour_manual(values = batch_cols) +
+  labs(x = "MS batch", y = "Median log2 intensity") +
+  theme(legend.position = "none")
+```
