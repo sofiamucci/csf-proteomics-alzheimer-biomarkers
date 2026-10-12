@@ -25,8 +25,12 @@ so the exact inputs of every run are traceable.
 Because the data come from Spectronaut rather than MaxQuant, there are no
 `Reverse`, `Potential contaminant` or `Only identified by site` columns:
 decoys are removed upstream by the q-value cutoff, and contaminants are
-filtered explicitly in this pipeline. Values that did not pass the q-value
-cutoff are reported as `"Filtered"` and are read as missing.
+filtered explicitly in this pipeline. The export applied a decoy filter and a
+q-value filter (≤ 0.01 per run); values that did not pass the cutoff are
+reported as `"Filtered"` and are read as missing. No imputation was performed
+in Spectronaut. Intensities were already normalized by the authors with
+Spectronaut's "Local Normalization" (local regression; Callister et al.,
+2006), applied once across all 210 runs.
 
 ## Data Import
 
@@ -41,6 +45,26 @@ is applied at this step; the script stops if dimensions, identifier
 uniqueness or positivity of the intensities differ from expected. 21.2% of
 values are missing.
 
+## Sample Annotation
+
+`scripts/02_annotate.R` joins the authors' sample table (Table S2) to the
+intensity matrix by raw-file name; all 210 runs are annotated. The authors
+excluded 13 runs (comorbidity, 6; excessive missing values, 5; blood–brain
+barrier leakage, 1; duplicate injection, 1). These runs are retained in the
+data object with their exclusion reason, for inspection in QC, and removed
+before analysis, leaving the published 197 individuals.
+
+The four collection sites were measured in three MS batches: Sweden (n = 60),
+Magdeburg (38) and Kiel (16) together, and Berlin (83). Site therefore
+determines batch. Kiel contributes only controls, younger than those of the
+other sites (median age 32 vs. 68–74 years).
+
+Diagnosis is the biochemical AD classification (88 AD, 109 controls), which is
+complete for all retained samples; the clinical diagnosis is missing for 60.
+Because the biochemical classification is derived from CSF tau and Aβ, the
+association of MAPT with diagnosis is partly circular and is used as a
+pipeline check rather than as a finding.
+
 ## Software Environment
 
 R 4.6.1 is installed in a dedicated conda environment (`environment.yml`,
@@ -49,4 +73,3 @@ with renv (`renv.lock`). At the time of setup conda-forge had no `r-renv`
 build for R 4.6, so renv is installed from CRAN through the project's
 bootstrap script (`renv/activate.R`). A Docker image restoring `renv.lock`
 on `rocker/r-ver:4.6.1` will be added once the package set is final.
-
