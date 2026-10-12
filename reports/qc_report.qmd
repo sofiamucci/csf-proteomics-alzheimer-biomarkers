@@ -14,11 +14,12 @@ execute:
 
 ```{r}
 #| label: setup
+here::i_am("reports/qc_report.qmd")
 library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-dat  <- readRDS("../data/processed/02_annotate.rds")
+dat  <- readRDS(here::here("data/processed/02_annotate.rds"))
 keep <- !dat$sample$excluded
 X    <- log2(dat$intensity[, keep])
 smp  <- dat$sample[keep, ]
@@ -120,4 +121,122 @@ run_qc |>
   scale_colour_manual(values = batch_cols) +
   labs(x = "MS batch", y = "Median log2 intensity") +
   theme(legend.position = "none")
+```
+
+## Normalization assessment
+
+Per-run medians of complete protein groups were modelled on batch and
+diagnosis. Batch offsets are modelled as a covariate in limma rather than
+removed by renormalization, because run-level centering would also remove the
+small diagnosis-associated shift shown below.
+
+```{r}
+#| label: tbl-median-model
+#| tbl-cap: "Linear model of per-run median log2 intensity (complete protein groups) on batch and diagnosis."
+coef_table <- function(fit) {
+  ci <- confint(fit)
+  data.frame(
+    term     = rownames(ci),
+    estimate = round(coef(fit), 3),
+    ci_low   = round(ci[, 1], 3),
+    ci_high  = round(ci[, 2], 3),
+    p        = signif(summary(fit)$coefficients[, 4], 2),
+    row.names = NULL
+  )
+}
+coef_table(lm(median_complete ~ batch + group, data = run_qc)) |> knitr::kable()
+```
+
+## Drivers of missingness
+
+```{r}
+#| label: tbl-missing-model
+#| tbl-cap: "Linear model of the fraction of missing values per run on batch, age and diagnosis."
+coef_table(lm(frac_missing ~ batch + age + group, data = run_qc)) |> knitr::kable()
+```
+
+Missingness depends on diagnosis after adjusting for batch and age, so missing
+values are not independent of the contrast of interest. This rules out both
+left-censored imputation and analysis of observed values only, and motivates a
+model of the missingness mechanism in the differential abundance step.
+
+## Runs with low protein coverage
+
+Runs more than 3 median absolute deviations below their batch median in protein
+groups quantified. All are retained; sample-level quality weights are estimated
+in the limma model.
+
+```{r}
+#| label: tbl-flagged
+#| tbl-cap: "Runs with low protein coverage relative to their MS batch."
+run_qc |>
+  group_by(batch) |>
+  filter(n_quantified < median(n_quantified) - 3 * mad(n_quantified)) |>
+  ungroup() |>
+  transmute(run = substring(run, pmax(1, nchar(run) - 29)), batch, site, group, age,
+            n_quantified, `% missing` = round(100 * frac_missing, 1),
+            median_complete = round(median_complete, 2)) |>
+  knitr::kable()
+```
+
+## Blood contamination
+
+Erythrocyte contamination is scored with a panel of erythrocyte-specific
+proteins (Geyer et al., 2019, *EMBO Mol Med*). Each protein is z-scored across
+runs, and the run score is the mean z-score of the panel proteins it contains.
+
+```{r}
+#| label: ery-score
+ery_panel <- c("HBA1", "HBB", "HBD", "CA1", "CA2", "CAT", "PRDX2", "BLVRB", "SLC4A1")
+gene_list <- strsplit(dat$protein$PG.Genes, ";")
+in_panel  <- vapply(gene_list, function(g) any(g %in% ery_panel), logical(1))
+
+Z <- t(scale(t(X[in_panel, ])))
+run_qc$ery_score <- colMeans(Z, na.rm = TRUE)
+```
+
+Panel proteins found: `r sum(in_panel)` of `r length(ery_panel)`.
+
+```{r}
+#| label: fig-ery
+#| fig-cap: "Erythrocyte contamination score per run, by MS batch and diagnosis. Dashed line: flagging threshold (median + 3 MAD)."
+ery_cut_plot <- median(run_qc$ery_score) + 3 * mad(run_qc$ery_score)
+ggplot(run_qc, aes(batch, ery_score, colour = group, shape = group)) +
+  geom_hline(yintercept = 0, colour = "grey75") +
+  geom_hline(yintercept = ery_cut_plot, colour = "grey45", linetype = "dashed") +
+  geom_point(position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.6),
+             size = 2.2, alpha = 0.85) +
+  scale_colour_manual(values = c(control = "#2a78d6", AD = "#eb6834")) +
+  labs(x = "MS batch", y = "Erythrocyte score (mean z)",
+       colour = "Diagnosis", shape = "Diagnosis")
+```
+
+```{r}
+#| label: tbl-ery-model
+#| tbl-cap: "Linear model of the erythrocyte contamination score on batch and diagnosis."
+coef_table(lm(ery_score ~ batch + group, data = run_qc)) |> knitr::kable()
+```
+
+```{r}
+#| label: ery-flag
+ery_cut <- median(run_qc$ery_score) + 3 * mad(run_qc$ery_score)
+run_qc$ery_flag <- run_qc$ery_score > ery_cut
+```
+
+Contamination does not differ between diagnostic groups, so it is not expected
+to bias the AD vs. control comparison. `r sum(run_qc$ery_flag)` runs exceed the
+contamination threshold (median + 3 MAD = `r round(ery_cut, 2)`): all are
+retained in the main analysis and removed in a sensitivity analysis. Protein
+groups strongly correlated with the score are flagged as contamination-prone
+in the differential abundance results.
+
+```{r}
+#| label: tbl-ery-top
+#| tbl-cap: "Runs with the highest erythrocyte contamination score. Runs above the threshold are flagged."
+run_qc |>
+  arrange(desc(ery_score)) |>
+  transmute(run = substring(run, pmax(1, nchar(run) - 29)), batch, site, group,
+            ery_score = round(ery_score, 2), flagged = ery_flag) |>
+  head(10) |>
+  knitr::kable()
 ```
