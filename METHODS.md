@@ -108,6 +108,23 @@ erythrocyte scores and are retained. PC1 is not used as a covariate, as it
 carries disease signal; a plasma-protein score is used in a sensitivity
 analysis instead.
 
+## Protein Filtering
+
+`scripts/04_filter.R` removes 14 laboratory-contaminant protein groups
+(12 skin and hair keratin groups, and trypsin PRSS1/PRSS3, which shares
+peptides with the digestion enzyme). Lysozyme, a common laboratory contaminant
+but also a normal CSF protein, is retained, as are the blood-panel proteins
+used as QC markers.
+
+Protein groups are retained if quantified in at least 50% of the runs of at
+least one diagnostic group, leaving 1,317 of 1,542. Requiring the threshold in
+both groups would have removed 75 further protein groups, 74 of them quantified
+mainly in AD; these include NEFL, UCHL1, PTPA and EFHD2, i.e. intracellular
+neuronal proteins that rise above the detection limit in AD. The number of
+retained protein groups changes gradually with the threshold (1,401 at 30%,
+1,317 at 50%, 1,153 at 70%), so the choice of 50% is not at an unstable point.
+All protein groups are kept in the output object with their exclusion reason.
+
 ## Software Environment
 
 R 4.6.1 is installed in a dedicated conda environment (`environment.yml`,
