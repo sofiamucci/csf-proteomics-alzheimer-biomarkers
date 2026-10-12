@@ -19,7 +19,9 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-dat  <- readRDS(here::here("data/processed/02_annotate.rds"))
+# Metrics, scores and flags are computed in scripts/03_sample_qc.R;
+# this report only displays and models them
+dat  <- readRDS(here::here("data/processed/03_sample_qc.rds"))
 keep <- !dat$sample$excluded
 X    <- log2(dat$intensity[, keep])
 smp  <- dat$sample[keep, ]
@@ -27,13 +29,11 @@ smp  <- dat$sample[keep, ]
 complete <- rowSums(is.na(X)) == 0
 
 run_qc <- smp |>
-  select(run, batch, site, group, age, sex) |>
-  mutate(
-    n_quantified    = colSums(!is.na(X)),
-    frac_missing    = colMeans(is.na(X)),
-    median_observed = apply(X, 2, median, na.rm = TRUE),
-    median_complete = apply(X[complete, ], 2, median)
-  )
+  select(run, batch, site, group, age, sex,
+         n_quantified, frac_missing, median_observed, median_complete,
+         ery_score, plasma_score, low_coverage, ery_flag)
+
+flag_cut <- function(x, k = 3) median(x) + k * mad(x)   # same rule as 03_sample_qc.R
 
 # Categorical palette validated for colour-vision deficiency; batch is also
 # encoded by shape and axis labels, so colour never carries identity alone
@@ -170,9 +170,7 @@ in the limma model.
 #| label: tbl-flagged
 #| tbl-cap: "Runs with low protein coverage relative to their MS batch."
 run_qc |>
-  group_by(batch) |>
-  filter(n_quantified < median(n_quantified) - 3 * mad(n_quantified)) |>
-  ungroup() |>
+  filter(low_coverage) |>
   transmute(run = substring(run, pmax(1, nchar(run) - 29)), batch, site, group, age,
             n_quantified, `% missing` = round(100 * frac_missing, 1),
             median_complete = round(median_complete, 2)) |>
@@ -185,25 +183,16 @@ Erythrocyte contamination is scored with a panel of erythrocyte-specific
 proteins (Geyer et al., 2019, *EMBO Mol Med*). Each protein is z-scored across
 runs, and the run score is the mean z-score of the panel proteins it contains.
 
-```{r}
-#| label: ery-score
-ery_panel <- c("HBA1", "HBB", "HBD", "CA1", "CA2", "CAT", "PRDX2", "BLVRB", "SLC4A1")
-gene_list <- strsplit(dat$protein$PG.Genes, ";")
-in_panel  <- vapply(gene_list, function(g) any(g %in% ery_panel), logical(1))
-
-Z <- t(scale(t(X[in_panel, ])))
-run_qc$ery_score <- colMeans(Z, na.rm = TRUE)
-```
-
-Panel proteins found: `r sum(in_panel)` of `r length(ery_panel)`.
+Panel protein groups found: `r sum(dat$protein$ery_panel)`
+(`r paste(dat$protein$PG.Genes[dat$protein$ery_panel], collapse = ", ")`).
 
 ```{r}
 #| label: fig-ery
 #| fig-cap: "Erythrocyte contamination score per run, by MS batch and diagnosis. Dashed line: flagging threshold (median + 3 MAD)."
-ery_cut_plot <- median(run_qc$ery_score) + 3 * mad(run_qc$ery_score)
+ery_cut <- flag_cut(run_qc$ery_score)
 ggplot(run_qc, aes(batch, ery_score, colour = group, shape = group)) +
   geom_hline(yintercept = 0, colour = "grey75") +
-  geom_hline(yintercept = ery_cut_plot, colour = "grey45", linetype = "dashed") +
+  geom_hline(yintercept = ery_cut, colour = "grey45", linetype = "dashed") +
   geom_point(position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.6),
              size = 2.2, alpha = 0.85) +
   scale_colour_manual(values = c(control = "#2a78d6", AD = "#eb6834")) +
@@ -215,12 +204,6 @@ ggplot(run_qc, aes(batch, ery_score, colour = group, shape = group)) +
 #| label: tbl-ery-model
 #| tbl-cap: "Linear model of the erythrocyte contamination score on batch and diagnosis."
 coef_table(lm(ery_score ~ batch + group, data = run_qc)) |> knitr::kable()
-```
-
-```{r}
-#| label: ery-flag
-ery_cut <- median(run_qc$ery_score) + 3 * mad(run_qc$ery_score)
-run_qc$ery_flag <- run_qc$ery_score > ery_cut
 ```
 
 Contamination does not differ between diagnostic groups, so it is not expected
@@ -315,16 +298,9 @@ with the overall intensity level of each run
 (r = `r round(cor(run_qc$PC1, run_qc$median_complete), 2)`) and partly
 associated with diagnosis.
 
-```{r}
-#| label: plasma-score
-plasma_panel <- c("ALB", "TF", "HPX", "SERPINA1", "AHSG", "APOA1", "GC", "PLG", "F2", "HP")
-in_plasma    <- vapply(gene_list, function(g) any(g %in% plasma_panel), logical(1))
-run_qc$plasma_score <- colMeans(t(scale(t(X[in_plasma, ]))), na.rm = TRUE)
-```
-
 A plasma-protein score is computed as for the erythrocyte score, from
-`r sum(in_plasma)` protein groups of `r length(plasma_panel)` classic plasma
-proteins. Its correlation with PC1 is
+`r sum(dat$protein$plasma_panel)` protein groups of classic plasma proteins
+(`r paste(unique(unlist(strsplit(dat$protein$PG.Genes[dat$protein$plasma_panel], ";"))), collapse = ", ")`). Its correlation with PC1 is
 `r round(cor(run_qc$PC1, run_qc$plasma_score), 2)`; its correlation with the
 erythrocyte score is `r round(cor(run_qc$ery_score, run_qc$plasma_score), 2)`.
 
