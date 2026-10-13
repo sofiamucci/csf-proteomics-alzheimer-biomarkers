@@ -125,6 +125,25 @@ retained protein groups changes gradually with the threshold (1,401 at 30%,
 1,317 at 50%, 1,153 at 70%), so the choice of 50% is not at an unstable point.
 All protein groups are kept in the output object with their exclusion reason.
 
+## Missing Values
+
+`scripts/05_missing_value_methods.R` compares three treatments of missing
+values on the same model (`~ group + batch + age + sex`, AD vs. control):
+limma on observed values only, limma after left-censored imputation
+(down-shifted normal; shift 1.8 SD, width 0.3 SD, fixed seed), and proDA
+(Ahlmann-Eltze & Anders, bioRxiv 2019), which models the probability of a missing
+value as a function of intensity without imputation. The comparison is shown
+in `reports/analysis_report.qmd`.
+
+At FDR < 5%, proDA identifies 244 protein groups (178 higher, 66 lower in AD),
+limma on observed values 259, and imputation 290. Imputation inflated
+fold changes across the proteome, added 47 protein groups higher in AD, and
+disagreed with proDA on 132 protein groups. Limma on observed values agreed
+with proDA on 239 of 244; the 25 discordant protein groups lie near the
+threshold with near-identical fold changes. proDA is used for the main
+analysis. Because proDA does not accept sample weights, limma on observed
+values with `arrayWeights` is reported as a sensitivity analysis.
+
 ## Software Environment
 
 R 4.6.1 is installed in a dedicated conda environment (`environment.yml`,
