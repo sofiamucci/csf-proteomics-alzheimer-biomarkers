@@ -1,0 +1,100 @@
+---
+title: "Differential abundance: CSF proteome in Alzheimer's disease (PXD016278)"
+format:
+  html:
+    embed-resources: true
+    toc: true
+    fig-width: 7
+    fig-height: 4.5
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+here::i_am("reports/analysis_report.qmd")
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+theme_set(
+  theme_minimal(base_size = 11) +
+    theme(panel.grid.minor = element_blank(), legend.position = "right")
+)
+
+comp <- readRDS(here::here("data/processed/05_missing_value_methods.rds"))
+```
+
+## Handling of missing values
+
+Missing values are more frequent in controls than in AD after adjusting for
+batch and age (see QC report), so their treatment can bias the AD vs. control
+comparison. Three treatments were compared on the same model
+(`~ group + batch + age + sex`): limma on observed values only, limma after
+left-censored imputation (down-shifted normal, 1.8 SD shift, 0.3 SD width), and
+proDA, which models the probability of a value being missing as a function of
+intensity without imputing.
+
+```{r}
+#| label: tbl-method-direction
+#| tbl-cap: "Protein groups with FDR < 5% by method and direction of change."
+long <- comp |>
+  pivot_longer(-c(protein, gene, missing_control, missing_AD),
+               names_to = c(".value", "method"),
+               names_pattern = "(logFC|p_adj|p)_(observed|imputed|proda)")
+
+long |>
+  filter(p_adj < 0.05) |>
+  count(method, direction = if_else(logFC > 0, "higher in AD", "lower in AD")) |>
+  pivot_wider(names_from = direction, values_from = n) |>
+  mutate(total = `higher in AD` + `lower in AD`) |>
+  knitr::kable()
+```
+
+```{r}
+#| label: tbl-method-agreement
+#| tbl-cap: "Agreement of each alternative with proDA (FDR < 5%)."
+agreement <- function(alt) {
+  sig_p <- comp$p_adj_proda < 0.05
+  sig_a <- comp[[paste0("p_adj_", alt)]] < 0.05
+  tibble(method = alt,
+         both = sum(sig_p & sig_a, na.rm = TRUE),
+         `proDA only` = sum(sig_p & !sig_a, na.rm = TRUE),
+         `alternative only` = sum(!sig_p & sig_a, na.rm = TRUE))
+}
+bind_rows(agreement("observed"), agreement("imputed")) |> knitr::kable()
+```
+
+```{r}
+#| label: fig-method-logfc
+#| fig-cap: "AD vs control log2 fold change of each alternative against proDA. Each point is a protein group; colour is the difference in missing-value fraction between controls and AD. Dashed line: identity."
+#| fig-width: 8
+comp |>
+  mutate(missing_gap = missing_control - missing_AD) |>
+  pivot_longer(c(logFC_observed, logFC_imputed),
+               names_to = "method", values_to = "logFC_alt") |>
+  mutate(method = recode(method,
+                         logFC_observed = "Observed values only",
+                         logFC_imputed  = "Left-censored imputation")) |>
+  ggplot(aes(logFC_proda, logFC_alt, colour = missing_gap)) +
+  geom_abline(linetype = "dashed", colour = "grey50") +
+  geom_point(size = 1.2, alpha = 0.7) +
+  geom_text(data = ~ filter(.x, gene %in% c("NEFL", "UCHL1")),
+            aes(label = gene), colour = "black", vjust = -0.8, size = 3.2) +
+  facet_wrap(~ method) +
+  coord_equal() +
+  scale_colour_gradient2(low = "#2a78d6", mid = "grey85", high = "#eb6834",
+                         midpoint = 0,
+                         name = "Missing fraction\ncontrols − AD") +
+  labs(x = "log2 fold change, proDA", y = "log2 fold change, alternative")
+```
+
+Left-censored imputation inflates effect sizes across the proteome, most
+strongly for protein groups with more missing values in controls, and changes
+the set of significant protein groups substantially. Limma on observed values
+agrees closely with proDA; discordant protein groups lie near the FDR
+threshold with near-identical fold changes. proDA is used for the main
+analysis; limma on observed values with sample quality weights is reported as
+a sensitivity analysis.
