@@ -187,6 +187,28 @@ CSF markers of AD.
 `scripts/07_export_results.R` writes the full results table
 (`results/differential_abundance.csv`) with a column dictionary.
 
+## Diagnostic Classifier
+
+`scripts/08_classifier.R` fits an elastic-net logistic regression (glmnet,
+α = 0.5, `lambda.1se` from inner 5-fold cross-validation) to classify AD vs.
+control. MAPT is excluded from the predictors because diagnosis is defined from
+CSF tau; Kiel is excluded because its controls are age-mismatched and it has no
+AD cases, leaving 181 samples (88 AD). Candidate predictors are the 981 protein
+groups with ≤ 20% missing values. Imputation (half the training minimum),
+scaling, protein selection and penalty are learned within each training split,
+so no information from test samples enters model building. AUC is computed
+with a fixed direction (controls lower).
+
+Repeated nested cross-validation (10 × 5-fold, stratified) gives a mean AUC of
+0.88 (range 0.84–0.90), against 0.60 for an age + sex baseline. In
+leave-one-site-out validation the AUC is 0.86 for Sweden, 0.88 for Magdeburg
+and 0.74 for Berlin; Berlin is the largest cohort, so the model is trained on
+fewer samples when it is held out, and its biochemical controls are mostly
+patients with other clinical diagnoses. The most stably selected predictors
+(YWHAZ, ALDOA and SPP1 in all 50 outer-fold models; YWHAG, GDA, PKM and SMOC1 in
+≥ 90%) coincide with the barrier-robust core of the differential abundance
+analysis.
+
 ## Software Environment
 
 R 4.6.1 is installed in a dedicated conda environment (`environment.yml`,
