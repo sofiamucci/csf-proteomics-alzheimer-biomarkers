@@ -25,6 +25,12 @@ theme_set(
 )
 
 comp <- readRDS(here::here("data/processed/05_missing_value_methods.rds"))
+da   <- readRDS(here::here("data/processed/06_differential_abundance.rds"))
+res  <- readr::read_csv(here::here("results/differential_abundance.csv"), show_col_types = FALSE)
+
+tier_cols <- c("barrier-robust"  = "#eb6834",
+               "main model only" = "#2a78d6",
+               "not significant" = "grey75")
 ```
 
 ## Handling of missing values
@@ -98,3 +104,135 @@ agrees closely with proDA; discordant protein groups lie near the FDR
 threshold with near-identical fold changes. proDA is used for the main
 analysis; limma on observed values with sample quality weights is reported as
 a sensitivity analysis.
+
+## Differential abundance
+
+Main model: proDA, `r da$model`, AD vs control, Benjamini-Hochberg FDR. Site
+(rather than MS batch) is used because each site was measured in a single batch
+and site separates Kiel (controls only) from Magdeburg.
+
+```{r}
+#| label: tbl-da-summary
+#| tbl-cap: "Protein groups by result tier and direction of change."
+res |>
+  count(tier, direction) |>
+  pivot_wider(names_from = direction, values_from = n, values_fill = 0) |>
+  knitr::kable()
+```
+
+```{r}
+#| label: fig-volcano
+#| fig-cap: "Volcano plot, AD vs control (main model). Barrier-robust protein groups remain significant after adjusting for the plasma-protein score. Adjusted p-values below 1e-16 are shown at 1e-16."
+#| fig-width: 8
+#| fig-height: 5.5
+label_genes <- c("MAPT", "SOD1", "PARK7", "UCHL1", "NEFL", "SMOC1", "YWHAZ",
+                 "ALDOA", "SPP1", "PKM", "ENO2", "FABP3")
+res |>
+  mutate(neglog_p = -log10(pmax(p_adj, 1e-16)),
+         tier = factor(tier, levels = names(tier_cols))) |>
+  ggplot(aes(log2FC, neglog_p, colour = tier)) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", colour = "grey50") +
+  geom_vline(xintercept = 0, colour = "grey85") +
+  geom_point(size = 1.4, alpha = 0.8) +
+  geom_text(data = ~ filter(.x, gene %in% label_genes) |> distinct(gene, .keep_all = TRUE),
+            aes(label = gene), colour = "black", size = 3, vjust = -0.7,
+            check_overlap = TRUE) +
+  scale_colour_manual(values = tier_cols, name = NULL) +
+  labs(x = "log2 fold change, AD vs control", y = "−log10 adjusted p-value") +
+  theme(legend.position = "top")
+```
+
+### Positive controls
+
+```{r}
+#| label: tbl-controls
+#| tbl-cap: "Known CSF markers of AD. MAPT is partly circular, since diagnosis is defined from CSF tau."
+res |>
+  filter(gene %in% c("MAPT", "SOD1", "PARK7", "UCHL1", "NEFL")) |>
+  transmute(gene, tier, log2FC = round(log2FC, 2),
+            p_adj = signif(pmax(p_adj, 1e-16), 2),
+            p_adj_plasma_adjusted = signif(p_adj_plasma_adjusted, 2)) |>
+  knitr::kable()
+```
+
+### Sensitivity analyses
+
+```{r}
+#| label: tbl-sensitivity
+#| tbl-cap: "Agreement of each sensitivity analysis with the main model: correlation of log2 fold changes, and significant protein groups shared, lost and gained."
+da$sensitivity_summary |>
+  mutate(r_logFC = round(r_logFC, 3)) |>
+  knitr::kable()
+```
+
+Results are unchanged without the runs flagged for blood contamination and
+after renormalization (the renormalized list differs only near the FDR
+threshold, as all fold changes shift by the small diagnosis-associated offset
+seen in QC). Limma with sample weights recovers the same effects with more
+power. Adjusting for the plasma-protein score, which is lower in AD, reduces
+the significant set to a core of protein groups. Whether the score acts as a
+confounder (barrier permeability) or a mediator of disease effects cannot be
+resolved without the CSF/serum albumin quotient, which is not available; both
+tiers are therefore reported.
+
+```{r}
+#| label: tbl-tier-direction
+#| tbl-cap: "Direction of change by tier. Decreases in AD depend more on the plasma-protein balance than increases."
+res |>
+  filter(tier != "not significant") |>
+  count(tier, direction) |>
+  group_by(tier) |>
+  mutate(`% of tier` = round(100 * n / sum(n))) |>
+  ungroup() |>
+  knitr::kable()
+```
+
+Of the 67 protein groups lower in AD, 61 lose significance after the plasma
+adjustment, whereas most of those higher in AD remain. Lower levels in AD are
+largely explained by the plasma-protein balance; the most specific signal is
+the release of brain-derived proteins.
+
+### Barrier-robust core
+
+```{r}
+#| label: fig-heatmap
+#| fig-cap: "Barrier-robust protein groups: z-scored log2 intensities per run (grey: missing), runs ordered by diagnosis and site, protein groups ordered by log2 fold change."
+#| fig-width: 9
+#| fig-height: 8
+filt <- readRDS(here::here("data/processed/04_filter.rds"))
+keep <- !filt$sample$excluded
+core <- filter(res, tier == "barrier-robust") |> arrange(log2FC)
+
+Z <- log2(filt$intensity[core$protein_group, keep])
+Z <- t(scale(t(Z)))
+smp_order <- filt$sample[keep, ] |> arrange(group, site) |> pull(run)
+
+as_tibble(Z, rownames = "protein_group") |>
+  left_join(select(core, protein_group, gene), by = "protein_group") |>
+  pivot_longer(-c(protein_group, gene), names_to = "run", values_to = "z") |>
+  left_join(select(filt$sample, run, group), by = "run") |>
+  mutate(run  = factor(run, levels = smp_order),
+         gene = factor(protein_group, levels = core$protein_group,
+                       labels = make.unique(core$gene))) |>
+  ggplot(aes(run, gene, fill = z)) +
+  geom_tile() +
+  facet_grid(~ group, scales = "free_x", space = "free_x") +
+  scale_fill_gradient2(low = "#2a78d6", mid = "white", high = "#eb6834",
+                       limits = c(-3, 3), oob = scales::squish, na.value = "grey85",
+                       name = "z-score") +
+  labs(x = "Runs", y = NULL) +
+  theme(axis.text.x = element_blank(), panel.grid = element_blank(),
+        axis.text.y = element_text(size = 7))
+```
+
+The core is dominated by glycolytic enzymes (ALDOA, ALDOC, PKM, LDHA, GPI,
+ENO2, PGK1), 14-3-3 proteins (YWHAZ, YWHAG, YWHAE) and established CSF markers
+of AD (MAPT, SOD1, UCHL1, SMOC1, SPP1, FABP3), mostly intracellular proteins
+higher in AD. The glycolytic signature replicates the original report.
+
+## Session information
+
+```{r}
+#| label: session-info
+sessionInfo()
+```
