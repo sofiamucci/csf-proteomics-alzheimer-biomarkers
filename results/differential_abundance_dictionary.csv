@@ -1,0 +1,23 @@
+column,description
+protein_group,Spectronaut protein group (UniProt accessions)
+gene,Gene name(s) of the protein group
+tier,barrier-robust: FDR < 5% in the main and plasma-adjusted models; main model only: FDR < 5% in the main model only; not significant
+direction,Sign of log2FC (AD relative to control)
+log2FC,"Main model (proDA, ~ group + site + age + sex): log2 fold change, AD vs control"
+se,Standard error of log2FC
+p_value,Main model p-value
+p_adj,Main model Benjamini-Hochberg adjusted p-value
+log2FC_plasma_adjusted,log2FC with the plasma-protein score as an additional covariate
+p_adj_plasma_adjusted,"Adjusted p-value, plasma-adjusted model"
+log2FC_limma_arrayweights,log2FC from limma on observed values with sample quality weights
+p_adj_limma_arrayweights,"Adjusted p-value, limma with sample quality weights"
+p_adj_without_blood_flag,"Adjusted p-value, main model without the 4 runs flagged for blood contamination"
+p_adj_renormalized,"Adjusted p-value, main model after per-run median centring"
+missing_control,Fraction of control runs with a missing value
+missing_AD,Fraction of AD runs with a missing value
+avg_abundance,Average log2 abundance estimated by proDA
+n_obs,Number of observed values
+r_erythrocyte,Spearman correlation with the erythrocyte contamination score
+r_plasma,Spearman correlation with the plasma-protein score
+blood_associated,Erythrocyte-panel protein or r_erythrocyte > 0.5
+plasma_associated,Plasma-panel protein or r_plasma > 0.5
