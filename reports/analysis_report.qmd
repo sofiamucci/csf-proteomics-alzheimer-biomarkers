@@ -230,6 +230,112 @@ ENO2, PGK1), 14-3-3 proteins (YWHAZ, YWHAG, YWHAE) and established CSF markers
 of AD (MAPT, SOD1, UCHL1, SMOC1, SPP1, FABP3), mostly intracellular proteins
 higher in AD. The glycolytic signature replicates the original report.
 
+## Diagnostic classifier
+
+An elastic-net logistic regression (α = 0.5, penalty chosen by inner 5-fold
+cross-validation, `lambda.1se`) classifies AD vs control from the proteome.
+Protein selection, imputation of missing values (half the training minimum)
+and scaling are learned within each training split. MAPT is excluded, as
+diagnosis is defined from CSF tau, and Kiel is excluded, as its controls are
+age-mismatched and include no AD. Performance is estimated by 10 × 5-fold
+nested cross-validation and by leave-one-site-out validation, against an
+age + sex baseline.
+
+```{r}
+#| label: clf-load
+clf <- readRDS(here::here("data/processed/08_classifier.rds"))
+
+roc_df <- function(y, prob) {
+  r <- pROC::roc(y, prob, direction = "<", quiet = TRUE)
+  tibble(fpr = 1 - r$specificities, tpr = r$sensitivities) |> arrange(fpr, tpr)
+}
+```
+
+`r clf$params$n_features` protein groups with ≤ `r 100 * clf$params$max_missing`%
+missing values were candidate predictors.
+
+```{r}
+#| label: tbl-clf-auc
+#| tbl-cap: "Area under the ROC curve: nested cross-validation (mean and range over 10 repetitions) and leave-one-site-out validation."
+cv_row <- clf$cv_auc |>
+  summarise(validation   = "Nested CV (10 × 5-fold)",
+            n            = nrow(filter(clf$cv_pred, repetition == 1)),
+            auc_proteome = sprintf("%.2f (%.2f–%.2f)", mean(auc_proteome),
+                                   min(auc_proteome), max(auc_proteome)),
+            auc_baseline = sprintf("%.2f", mean(auc_baseline)))
+site_rows <- clf$loso_auc |>
+  transmute(validation   = paste("Held-out site:", site),
+            n,
+            auc_proteome = sprintf("%.2f", auc_proteome),
+            auc_baseline = sprintf("%.2f", auc_baseline))
+bind_rows(cv_row, site_rows) |>
+  rename(`AUC proteome` = auc_proteome, `AUC age + sex` = auc_baseline) |>
+  knitr::kable()
+```
+
+```{r}
+#| label: fig-roc
+#| fig-cap: "ROC curves. Left: nested cross-validation, one line per repetition (proteome) and age + sex baseline. Right: leave-one-site-out, one line per held-out site."
+#| fig-width: 9
+#| fig-height: 4.5
+cv_curves <- clf$cv_pred |>
+  group_by(repetition) |>
+  group_modify(~ bind_rows(
+    mutate(roc_df(.x$y, .x$prob), model = "Proteome"),
+    mutate(roc_df(.x$y, .x$prob_baseline), model = "Age + sex")
+  )) |>
+  ungroup() |>
+  mutate(panel = "Nested cross-validation", line = paste(model, repetition))
+
+site_curves <- clf$loso |>
+  group_by(site) |>
+  group_modify(~ roc_df(.x$y, .x$prob)) |>
+  ungroup() |>
+  mutate(panel = "Leave-one-site-out", model = site, line = site)
+
+roc_cols <- c("Proteome" = "#eb6834", "Age + sex" = "grey60",
+              "Berlin" = "#2a78d6", "Magdeburg" = "#eb6834", "Sweden" = "#1baf7a")
+
+bind_rows(cv_curves, site_curves) |>
+  mutate(panel = factor(panel, levels = c("Nested cross-validation", "Leave-one-site-out"))) |>
+  ggplot(aes(fpr, tpr, group = line, colour = model)) +
+  geom_abline(linetype = "dashed", colour = "grey75") +
+  geom_step(alpha = 0.7, linewidth = 0.6) +
+  facet_wrap(~ panel) +
+  coord_equal() +
+  scale_colour_manual(values = roc_cols, name = NULL) +
+  labs(x = "1 − specificity", y = "Sensitivity") +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+#| label: fig-selection
+#| fig-cap: "Selection stability: fraction of the 50 outer-fold models selecting each protein group (top 20). Colour: sign of the mean coefficient."
+#| fig-height: 5
+clf$selection |>
+  slice_head(n = 20) |>
+  mutate(label = make.unique(gene),
+         label = factor(label, levels = rev(label)),
+         sign  = if_else(mean_coef > 0, "higher in AD", "lower in AD")) |>
+  ggplot(aes(freq, label, fill = sign)) +
+  geom_col(width = 0.7) +
+  scale_fill_manual(values = c("higher in AD" = "#eb6834", "lower in AD" = "#2a78d6"),
+                    name = NULL) +
+  scale_x_continuous(labels = scales::percent, limits = c(0, 1)) +
+  labs(x = "Selected in outer-fold models", y = NULL) +
+  theme(legend.position = "top")
+```
+
+The proteome discriminates AD from controls well beyond age and sex. Performance
+is maintained on held-out Swedish and Magdeburg cohorts and lower on Berlin,
+the largest cohort (so the model is trained on fewer samples when it is held
+out), whose biochemical controls are mostly patients with other clinical
+diagnoses. The most stable predictors (14-3-3 proteins, glycolytic enzymes,
+SPP1, SMOC1) coincide with the barrier-robust core of the differential
+abundance analysis, although the classifier did not use those results.
+Because diagnosis is defined biochemically from tau and Aβ, residual
+circularity through tau-correlated proteins cannot be excluded.
+
 ## Session information
 
 ```{r}
