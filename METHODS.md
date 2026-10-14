@@ -144,6 +144,49 @@ threshold with near-identical fold changes. proDA is used for the main
 analysis. Because proDA does not accept sample weights, limma on observed
 values with `arrayWeights` is reported as a sensitivity analysis.
 
+## Differential Abundance
+
+`scripts/06_differential_abundance.R` fits proDA with
+`~ group + site + age + sex` on the 1,317 retained protein groups and the 197
+retained runs, testing AD vs. control with Benjamini-Hochberg FDR < 5%. Site is
+used instead of MS batch: each site was measured in a single batch, and a site
+term separates Kiel (controls only) from Magdeburg, so Kiel controls inform
+variance and age effects but not the AD contrast.
+
+The main model identifies 259 protein groups (192 higher, 67 lower in AD). The
+original report's positive controls are recovered: SOD1 (log2FC 0.34) and PARK7
+(0.25), with MAPT the strongest effect (1.11; partly circular, as diagnosis is
+defined from CSF tau). UCHL1 is higher in AD (0.58); NEFL is not significant,
+consistent with its quantification near the detection limit by MS.
+
+Protein groups are flagged as blood- or plasma-associated if they belong to the
+corresponding panel or correlate with its score across runs (Spearman
+r > 0.5).
+
+Four sensitivity analyses were compared with the main model:
+
+| Analysis | r (log2FC) | Significant | Shared | Lost | Gained |
+|---|---|---|---|---|---|
+| limma, observed values, `arrayWeights` | 0.959 | 313 | 246 | 13 | 67 |
+| Without 4 blood-flagged runs | 0.999 | 261 | 252 | 7 | 9 |
+| Plasma-protein score as covariate | 0.842 | 53 | 51 | 208 | 2 |
+| Per-run median renormalization | 0.998 | 251 | 209 | 50 | 42 |
+
+Results are robust to blood contamination, normalization and the
+missing-value model. The plasma-protein score is lower in AD (−0.34, p = 6 × 10⁻⁴,
+adjusted for site, age and sex), and adjusting for it leaves 51 of the 259
+protein groups significant. Without a CSF/serum albumin quotient it cannot be
+determined whether the score is a confounder (barrier permeability) or lies on
+the disease pathway, so results are reported in two tiers: the main model, and
+a barrier-robust core significant in both models (45 higher, 6 lower in AD).
+Of the 67 protein groups lower in AD, 61 lose significance after the
+adjustment, so decreases are largely explained by the plasma-protein balance.
+The core is dominated by glycolytic enzymes, 14-3-3 proteins and established
+CSF markers of AD.
+
+`scripts/07_export_results.R` writes the full results table
+(`results/differential_abundance.csv`) with a column dictionary.
+
 ## Software Environment
 
 R 4.6.1 is installed in a dedicated conda environment (`environment.yml`,
