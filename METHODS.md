@@ -209,6 +209,16 @@ patients with other clinical diagnoses. The most stably selected predictors
 ≥ 90%) coincide with the barrier-robust core of the differential abundance
 analysis.
 
+## Reproducibility
+
+`run_pipeline.sh` runs the full analysis from data download to rendered
+reports (about 11 minutes) and logs the git commit, R and Quarto versions, and
+the duration of each step. A run from a clean state (processed data, results
+and reports deleted) reproduced every tier assignment and all limma-based and
+descriptive values exactly. proDA estimates differed between runs by less than
+3 × 10⁻⁵ in log2 fold change and 3 × 10⁻⁴ in adjusted p-value, owing to its
+iterative numerical optimization, without changing any result tier.
+
 ## Software Environment
 
 R 4.6.1 is installed in a dedicated conda environment (`environment.yml`,
