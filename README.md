@@ -114,7 +114,8 @@ both reports (about 11 minutes), logging the git commit and software versions.
 ├── figures/                        # figures used in this README
 ├── METHODS.md
 ├── environment.yml                 # R version (conda)
-└── renv.lock                       # R package versions
+├── renv.lock                       # R package versions
+└── LICENSE
 ```
 
 ## Limitations
