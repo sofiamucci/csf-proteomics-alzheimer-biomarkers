@@ -6,6 +6,7 @@ data/processed/
 logs/
 
 # Rendered reports (published separately)
+!docs/*.html
 *.html
 *_files/
 .quarto/
