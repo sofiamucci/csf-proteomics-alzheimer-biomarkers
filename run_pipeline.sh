@@ -48,4 +48,9 @@ run Rscript scripts/08_classifier.R
 run "$QUARTO" render reports/qc_report.qmd
 run "$QUARTO" render reports/analysis_report.qmd
 
+# ---- Publish ------------------------------------------------------------------
+# docs/ is served by GitHub Pages
+mkdir -p docs
+run cp reports/qc_report.html reports/analysis_report.html docs/
+
 log "=== Pipeline finished (log: ${LOG_FILE}) ==="

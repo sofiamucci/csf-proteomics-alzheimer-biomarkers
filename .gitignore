@@ -19,3 +19,6 @@ logs/
 
 # renv package library (restored from renv.lock)
 renv/library/
+
+# Rendered reports served by GitHub Pages
+!docs/*.html
