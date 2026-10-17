@@ -28,6 +28,14 @@ comp <- readRDS(here::here("data/processed/05_missing_value_methods.rds"))
 da   <- readRDS(here::here("data/processed/06_differential_abundance.rds"))
 res  <- readr::read_csv(here::here("results/differential_abundance.csv"), show_col_types = FALSE)
 
+# Key figures are also written to figures/ for the README
+save_fig <- function(p, file, width, height) {
+  dir.create(here::here("figures"), showWarnings = FALSE)
+  ggsave(here::here("figures", file), p, width = width, height = height,
+         dpi = 200, bg = "white")
+  p
+}
+
 tier_cols <- c("barrier-robust"  = "#eb6834",
                "main model only" = "#2a78d6",
                "not significant" = "grey75")
@@ -127,7 +135,7 @@ res |>
 #| fig-height: 5.5
 label_genes <- c("MAPT", "SOD1", "PARK7", "UCHL1", "NEFL", "SMOC1", "YWHAZ",
                  "ALDOA", "SPP1", "PKM", "ENO2", "FABP3")
-res |>
+p <- res |>
   mutate(neglog_p = -log10(pmax(p_adj, 1e-16)),
          tier = factor(tier, levels = names(tier_cols))) |>
   ggplot(aes(log2FC, neglog_p, colour = tier)) +
@@ -140,6 +148,7 @@ res |>
   scale_colour_manual(values = tier_cols, name = NULL) +
   labs(x = "log2 fold change, AD vs control", y = "−log10 adjusted p-value") +
   theme(legend.position = "top")
+save_fig(p, "volcano.png", 8, 5.5)
 ```
 
 ### Positive controls
@@ -207,7 +216,7 @@ Z <- log2(filt$intensity[core$protein_group, keep])
 Z <- t(scale(t(Z)))
 smp_order <- filt$sample[keep, ] |> arrange(group, site) |> pull(run)
 
-as_tibble(Z, rownames = "protein_group") |>
+p <- as_tibble(Z, rownames = "protein_group") |>
   left_join(select(core, protein_group, gene), by = "protein_group") |>
   pivot_longer(-c(protein_group, gene), names_to = "run", values_to = "z") |>
   left_join(select(filt$sample, run, group), by = "run") |>
@@ -223,6 +232,7 @@ as_tibble(Z, rownames = "protein_group") |>
   labs(x = "Runs", y = NULL) +
   theme(axis.text.x = element_blank(), panel.grid = element_blank(),
         axis.text.y = element_text(size = 7))
+save_fig(p, "heatmap_core.png", 9, 8)
 ```
 
 The core is dominated by glycolytic enzymes (ALDOA, ALDOC, PKM, LDHA, GPI,
@@ -296,7 +306,7 @@ site_curves <- clf$loso |>
 roc_cols <- c("Proteome" = "#eb6834", "Age + sex" = "grey60",
               "Berlin" = "#2a78d6", "Magdeburg" = "#eb6834", "Sweden" = "#1baf7a")
 
-bind_rows(cv_curves, site_curves) |>
+p <- bind_rows(cv_curves, site_curves) |>
   mutate(panel = factor(panel, levels = c("Nested cross-validation", "Leave-one-site-out"))) |>
   ggplot(aes(fpr, tpr, group = line, colour = model)) +
   geom_abline(linetype = "dashed", colour = "grey75") +
@@ -306,6 +316,7 @@ bind_rows(cv_curves, site_curves) |>
   scale_colour_manual(values = roc_cols, name = NULL) +
   labs(x = "1 − specificity", y = "Sensitivity") +
   theme(legend.position = "bottom")
+save_fig(p, "roc.png", 9, 4.5)
 ```
 
 ```{r}
