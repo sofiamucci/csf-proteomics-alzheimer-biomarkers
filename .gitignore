@@ -20,4 +20,4 @@ logs/
 renv/library/
 
 # Rendered reports served by GitHub Pages
-!docs/*.html
+!docs/**/*.html

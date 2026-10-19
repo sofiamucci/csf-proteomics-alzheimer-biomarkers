@@ -46,6 +46,7 @@ run Rscript scripts/06_differential_abundance.R
 run Rscript scripts/07_export_results.R
 run Rscript scripts/08_classifier.R
 run Rscript scripts/09_circularity.R
+run Rscript scripts/10_app_data.R
 run "$QUARTO" render reports/qc_report.qmd
 run "$QUARTO" render reports/analysis_report.qmd
 
@@ -53,5 +54,7 @@ run "$QUARTO" render reports/analysis_report.qmd
 # docs/ is served by GitHub Pages
 mkdir -p docs
 run cp reports/qc_report.html reports/analysis_report.html docs/
+run Rscript -e 'shinylive::export("app", "docs/app")'
+touch docs/.nojekyll
 
 log "=== Pipeline finished (log: ${LOG_FILE}) ==="

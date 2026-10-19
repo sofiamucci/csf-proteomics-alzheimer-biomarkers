@@ -79,7 +79,7 @@ core, as expected from analyses of the same samples.
 ## How This Was Built
 
 The analysis starts from the authors' Spectronaut protein report (DIA) and runs
-in ten scripts plus two reports. Key decisions, each justified in
+in eleven scripts, two reports and an interactive viewer. Key decisions, each justified in
 [METHODS.md](METHODS.md):
 
 | Step | Decision |
@@ -93,6 +93,11 @@ in ten scripts plus two reports. Key decisions, each justified in
 
 **Reports:** [QC report](https://sofiamucci.github.io/csf-proteomics-alzheimer-biomarkers/qc_report.html) ·
 [Analysis report](https://sofiamucci.github.io/csf-proteomics-alzheimer-biomarkers/analysis_report.html)
+
+**Interactive viewer:** [explore any protein by cohort](https://sofiamucci.github.io/csf-proteomics-alzheimer-biomarkers/app/):
+volcano plot with an adjustable FDR, effects in each cohort, abundance by site
+and relation to CSF tau. It runs in the browser (Shinylive), so the first load
+takes a few seconds.
 
 **Results table:** [results/differential_abundance.csv](results/differential_abundance.csv),
 with a [column dictionary](results/differential_abundance_dictionary.csv).
@@ -135,9 +140,11 @@ versions.
 │   ├── 06_differential_abundance.R # main model and sensitivity analyses
 │   ├── 07_export_results.R         # results table and dictionary
 │   ├── 08_classifier.R             # elastic net, nested and cross-site validation
-│   └── 09_circularity.R            # core signal vs CSF tau and amyloid
+│   ├── 09_circularity.R            # core signal vs CSF tau and amyloid
+│   └── 10_app_data.R               # per-cohort models and data for the viewer
+├── app/                            # interactive viewer (Shiny)
 ├── reports/                        # QC and analysis reports (Quarto)
-├── docs/                           # rendered reports, served by GitHub Pages
+├── docs/                           # reports and viewer, served by GitHub Pages
 ├── results/                        # differential abundance results
 ├── figures/                        # figures used in this README
 ├── METHODS.md
