@@ -99,7 +99,14 @@ with a [column dictionary](results/differential_abundance_dictionary.csv).
 
 ## Reproduce
 
-Requires conda (or mamba) and Quarto.
+With Docker (recommended; no other requirements):
+
+```bash
+docker build -t csf-proteomics .
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/project csf-proteomics
+```
+
+Or with conda (or mamba) and Quarto:
 
 ```bash
 mamba env create -f environment.yml
@@ -107,6 +114,8 @@ mamba activate csf-proteomics
 R -e "renv::restore()"
 bash run_pipeline.sh
 ```
+
+Both environments give the same result tiers.
 
 `run_pipeline.sh` downloads the data from PRIDE, runs every step, renders both
 reports and copies them to `docs/`, logging the git commit and software
@@ -132,6 +141,7 @@ versions.
 ├── results/                        # differential abundance results
 ├── figures/                        # figures used in this README
 ├── METHODS.md
+├── Dockerfile                      # full environment: R, packages, Quarto
 ├── environment.yml                 # R version (conda)
 ├── renv.lock                       # R package versions
 └── LICENSE

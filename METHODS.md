@@ -285,5 +285,12 @@ R 4.6.1 is installed in a dedicated conda environment (`environment.yml`,
 exported with `--from-history`, containing R only); R packages are pinned
 with renv (`renv.lock`). At the time of setup conda-forge had no `r-renv`
 build for R 4.6, so renv is installed from CRAN through the project's
-bootstrap script (`renv/activate.R`). A Docker image restoring `renv.lock`
-on `rocker/r-ver:4.6.1` will be added once the package set is final.
+bootstrap script (`renv/activate.R`).
+
+The `Dockerfile` provides the same environment without conda:
+`rocker/r-ver:4.6.1`, the packages in `renv.lock` (CRAN binaries from Posit
+Package Manager, Bioconductor packages built from source) and Quarto 1.10.18.
+The image holds the environment only; the repository is mounted at run time.
+A full run in the container from a clean state reproduced every tier
+assignment of the conda run, with log2 fold changes differing by less than
+3 × 10⁻⁵.

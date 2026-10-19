@@ -1,0 +1,8 @@
+.git
+data/raw
+data/processed
+logs
+renv/library
+renv/staging
+.Rproj.user
+*.Rproj
