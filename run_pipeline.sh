@@ -45,6 +45,7 @@ run Rscript scripts/05_missing_value_methods.R
 run Rscript scripts/06_differential_abundance.R
 run Rscript scripts/07_export_results.R
 run Rscript scripts/08_classifier.R
+run Rscript scripts/09_circularity.R
 run "$QUARTO" render reports/qc_report.qmd
 run "$QUARTO" render reports/analysis_report.qmd
 
