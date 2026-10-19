@@ -18,9 +18,11 @@ Three files are downloaded from PRIDE by `scripts/00_download_data.sh`: the
 protein group report used for the published analysis, the authors' sample
 annotation, and the community-annotated SDRF file. Raw files, spectral
 libraries and Spectronaut sessions are not needed. Input data are not
-committed to the repository; the script tests zip integrity and records the
-date, size and SHA256 checksum of each file in `data/raw/DOWNLOAD_LOG.txt`,
-so the exact inputs of every run are traceable.
+committed to the repository; the script tests zip integrity, records the date,
+size and SHA256 checksum of each file in `data/raw/DOWNLOAD_LOG.txt`, and stops
+if the protein report or the sample annotation differ from the checksums of
+the analysed files (`data/PXD016278.sha256`). The SDRF is community-maintained
+and may be revised, so its checksum is logged but not enforced.
 
 Because the data come from Spectronaut rather than MaxQuant, there are no
 `Reverse`, `Potential contaminant` or `Only identified by site` columns:
@@ -204,21 +206,31 @@ most likely reflects release from damaged cells.
 α = 0.5, `lambda.1se` from inner 5-fold cross-validation) to classify AD vs.
 control. MAPT is excluded from the predictors because diagnosis is defined from
 CSF tau; Kiel is excluded because its controls are age-mismatched and it has no
-AD cases, leaving 181 samples (88 AD). Candidate predictors are the 981 protein
-groups with ≤ 20% missing values. Imputation (half the training minimum),
-scaling, protein selection and penalty are learned within each training split,
-so no information from test samples enters model building. AUC is computed
-with a fixed direction (controls lower).
+AD cases, leaving 181 samples (88 AD). The missing-value filter (≤ 20% missing
+in the training split; median 978 of 1,316 protein groups retained),
+imputation (half the training minimum), scaling, protein selection and penalty
+are learned within each training split, so no information from test samples
+enters model building. AUC is computed with a fixed direction (controls
+lower).
 
 Repeated nested cross-validation (10 × 5-fold, stratified) gives a mean AUC of
-0.88 (range 0.84–0.90), against 0.60 for an age + sex baseline. In
-leave-one-site-out validation the AUC is 0.86 for Sweden, 0.88 for Magdeburg
-and 0.74 for Berlin; Berlin is the largest cohort, so the model is trained on
-fewer samples when it is held out, and its biochemical controls are mostly
-patients with other clinical diagnoses. The most stably selected predictors
-(YWHAZ, ALDOA and SPP1 in all 50 outer-fold models; YWHAG, GDA, PKM and SMOC1 in
-≥ 90%) coincide with the barrier-robust core of the differential abundance
-analysis.
+0.88 (range 0.83–0.90 across repetitions), against 0.60 for an age + sex
+baseline. Averaging out-of-fold predictions over repetitions gives one
+prediction per sample, with an AUC of 0.90 (DeLong 95% CI 0.85–0.95; paired
+test against the baseline, p = 1 × 10⁻¹⁰); at a threshold of 0.5, sensitivity
+is 0.81 and specificity 0.83. Predictions are under-confident (calibration
+slope 2.67), as expected from the strong penalty of `lambda.1se`: the model
+ranks samples well, but its probabilities are not calibrated risks.
+
+In leave-one-site-out validation the AUC is 0.88 for Magdeburg, 0.74 for Berlin
+and 0.73 for Sweden. An earlier version applied the missing-value filter to all
+samples, test site included, and gave 0.86 for Sweden: of the 1,088 protein
+groups that pass the filter without Sweden, 226 have more than 20% missing
+values in Sweden (100 more than 50%), where they are imputed from the training
+minimum. Cross-site performance therefore depends on how well the new site
+quantifies the model's proteins. The most stably selected predictors (YWHAZ,
+ALDOA and SPP1 in all 50 outer-fold models; YWHAG, GDA, PKM in ≥ 90%; SMOC1 in
+88%) coincide with the core of the differential abundance analysis.
 
 ## Circularity of the Diagnostic Label
 

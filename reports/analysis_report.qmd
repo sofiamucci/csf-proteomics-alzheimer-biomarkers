@@ -255,8 +255,9 @@ was also reported in the original study.
 
 An elastic-net logistic regression (α = 0.5, penalty chosen by inner 5-fold
 cross-validation, `lambda.1se`) classifies AD vs control from the proteome.
-Protein selection, imputation of missing values (half the training minimum)
-and scaling are learned within each training split. MAPT is excluded, as
+The missing-value filter (≤ 20% missing), protein selection, imputation of
+missing values (half the training minimum) and scaling are learned within each
+training split. MAPT is excluded, as
 diagnosis is defined from CSF tau, and Kiel is excluded, as its controls are
 age-mismatched and include no AD. Performance is estimated by 10 × 5-fold
 nested cross-validation and by leave-one-site-out validation, against an
@@ -272,18 +273,21 @@ roc_df <- function(y, prob) {
 }
 ```
 
-`r clf$params$n_features` protein groups with ≤ `r 100 * clf$params$max_missing`%
-missing values were candidate predictors.
+A median of `r clf$params$n_used_median` protein groups passed the
+missing-value filter in each training split.
 
 ```{r}
 #| label: tbl-clf-auc
-#| tbl-cap: "Area under the ROC curve: nested cross-validation (mean and range over 10 repetitions) and leave-one-site-out validation."
-cv_row <- clf$cv_auc |>
-  summarise(validation   = "Nested CV (10 × 5-fold)",
-            n            = nrow(filter(clf$cv_pred, repetition == 1)),
-            auc_proteome = sprintf("%.2f (%.2f–%.2f)", mean(auc_proteome),
-                                   min(auc_proteome), max(auc_proteome)),
-            auc_baseline = sprintf("%.2f", mean(auc_baseline)))
+#| tbl-cap: "Area under the ROC curve. Nested CV: out-of-fold predictions averaged over 10 repetitions, with DeLong 95% confidence interval; in brackets, the range of AUC across repetitions. Leave-one-site-out: one model per held-out site."
+oa <- clf$oof_auc
+cv_row <- tibble(
+  validation   = "Nested CV (10 × 5-fold)",
+  n            = nrow(clf$oof),
+  auc_proteome = sprintf("%.2f (95%% CI %.2f–%.2f) [%.2f–%.2f]",
+                         oa$auc[1], oa$ci_low[1], oa$ci_high[1],
+                         min(clf$cv_auc$auc_proteome), max(clf$cv_auc$auc_proteome)),
+  auc_baseline = sprintf("%.2f (95%% CI %.2f–%.2f)", oa$auc[2], oa$ci_low[2], oa$ci_high[2])
+)
 site_rows <- clf$loso_auc |>
   transmute(validation   = paste("Held-out site:", site),
             n,
@@ -293,6 +297,35 @@ bind_rows(cv_row, site_rows) |>
   rename(`AUC proteome` = auc_proteome, `AUC age + sex` = auc_baseline) |>
   knitr::kable()
 ```
+
+```{r}
+#| label: tbl-clf-operating
+#| tbl-cap: "Performance of the averaged out-of-fold predictions at a fixed probability threshold of 0.5."
+clf$operating |>
+  mutate(across(-threshold, ~ sprintf("%.2f", .x))) |>
+  knitr::kable()
+```
+
+```{r}
+#| label: fig-calibration
+#| fig-cap: "Calibration of the averaged out-of-fold predictions: observed fraction of AD by bin of predicted probability (point size: number of samples). Dashed line: perfect calibration."
+#| fig-height: 3.8
+#| fig-width: 4.5
+clf$calibration |>
+  ggplot(aes(predicted, observed)) +
+  geom_abline(linetype = "dashed", colour = "grey60") +
+  geom_line(colour = "#eb6834") +
+  geom_point(aes(size = n), colour = "#eb6834") +
+  coord_equal(xlim = c(0, 1), ylim = c(0, 1)) +
+  scale_size_area(max_size = 5, guide = "none") +
+  labs(x = "Predicted probability of AD", y = "Observed fraction with AD")
+```
+
+Calibration slope `r sprintf("%.2f", clf$calib_fit$slope)` and intercept
+`r sprintf("%.2f", clf$calib_fit$intercept)` (ideal: 1 and 0); a slope below 1
+means predictions are too extreme, above 1 too conservative. The proteome
+outperforms the age + sex baseline (paired DeLong test,
+p = `r format.pval(clf$oof_auc$p_vs_baseline[1], digits = 2, eps = 1e-4)`).
 
 ```{r}
 #| label: fig-roc
@@ -348,11 +381,15 @@ clf$selection |>
   theme(legend.position = "top")
 ```
 
-The proteome discriminates AD from controls well beyond age and sex. Performance
-is maintained on held-out Swedish and Magdeburg cohorts and lower on Berlin,
-the largest cohort (so the model is trained on fewer samples when it is held
-out), whose biochemical controls are mostly patients with other clinical
-diagnoses. The most stable predictors (14-3-3 proteins, glycolytic enzymes,
+The proteome discriminates AD from controls well beyond age and sex. Across
+sites, performance is maintained for Magdeburg and lower for Berlin and Sweden.
+Berlin is the largest cohort, so the model is trained on fewer samples when it
+is held out, and its controls are mostly patients with other neurological
+diagnoses. Sweden quantifies fewer proteins: many protein groups selected on
+the other two sites are frequently missing there and are imputed from the
+training minimum. When the missing-value filter was computed on all samples,
+test site included, Sweden reached 0.86; the lower value is the honest
+estimate of transfer to a new site. The most stable predictors (14-3-3 proteins, glycolytic enzymes,
 SPP1, SMOC1) are the same proteins as the barrier-robust core of the
 differential abundance analysis; both analyses use the same samples, so this
 is consistency rather than independent confirmation. The next section

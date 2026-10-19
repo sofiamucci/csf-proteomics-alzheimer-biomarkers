@@ -58,10 +58,14 @@ rerun of the full pipeline reproduced every result tier.
 ## Can It Diagnose?
 
 An elastic-net classifier built only on the proteome (tau excluded) separates
-AD from controls with an **AUC of 0.88** in nested cross-validation, against
-0.60 for age and sex alone. Trained on two hospitals and tested on the third,
-it reaches 0.86 and 0.88 for two cohorts and 0.74 for the third, whose controls
-are mostly patients with other neurological diagnoses.
+AD from controls with an **AUC of 0.88** in nested cross-validation (95% CI
+0.85–0.95 on averaged out-of-fold predictions), against 0.60 for age and sex
+alone; at a 0.5 threshold, sensitivity is 0.81 and specificity 0.83. Trained on
+two hospitals and tested on the third, it reaches 0.88, 0.74 and 0.73. Transfer
+depends on how well the new hospital quantifies the model's proteins: once the
+missing-value filter was correctly restricted to the training hospitals, one
+cohort dropped from 0.86 to 0.73. Predicted probabilities are under-confident
+and would need recalibration before being read as risks.
 
 This should be read against the label itself: CSF t-tau and Aβ42 alone
 reconstruct the diagnosis with an AUC of 0.98. The proteome learns an
