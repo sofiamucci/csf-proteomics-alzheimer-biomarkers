@@ -342,10 +342,120 @@ is maintained on held-out Swedish and Magdeburg cohorts and lower on Berlin,
 the largest cohort (so the model is trained on fewer samples when it is held
 out), whose biochemical controls are mostly patients with other clinical
 diagnoses. The most stable predictors (14-3-3 proteins, glycolytic enzymes,
-SPP1, SMOC1) coincide with the barrier-robust core of the differential
-abundance analysis, although the classifier did not use those results.
-Because diagnosis is defined biochemically from tau and Aβ, residual
-circularity through tau-correlated proteins cannot be excluded.
+SPP1, SMOC1) are the same proteins as the barrier-robust core of the
+differential abundance analysis; both analyses use the same samples, so this
+is consistency rather than independent confirmation. The next section
+quantifies how much of this signal is explained by the CSF biomarkers that
+define the diagnosis.
+
+## Circularity of the diagnostic label
+
+Diagnosis is biochemical: AD requires high CSF tau and low amyloid, with the
+amyloid measure and thresholds differing by site. Every AD case has t-tau above
+400 pg/ml, so any protein that rises with neurodegeneration is associated with
+the label by construction. t-tau and Aβ42 are the only biomarkers measured at
+all three sites with AD cases (n = 181; p-tau is missing in Berlin and Aβ42/40
+in Sweden). The analysis uses the barrier-robust core without MAPT (50 protein
+groups), summarised as a signed score: the mean z-score across the core, with
+proteins lower in AD inverted, so that higher is more AD-like.
+
+```{r}
+#| label: circ-load
+circ <- readRDS(here::here("data/processed/09_circularity.rds"))
+grp_cols <- c("control" = "#2a78d6", "AD" = "#eb6834")
+```
+
+```{r}
+#| label: fig-circ-tau
+#| fig-cap: "Core score against CSF t-tau, by site. Lines: linear fit within each diagnostic group. The score rises with t-tau with a similar slope in controls and AD."
+#| fig-width: 9
+#| fig-height: 3.8
+p <- circ$core_score |>
+  filter(!is.na(t_tau)) |>
+  mutate(site = droplevels(site)) |>
+  ggplot(aes(t_tau, core_score, colour = group)) +
+  geom_point(alpha = 0.7, size = 1.6) +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.8) +
+  scale_x_log10() +
+  scale_colour_manual(values = grp_cols, name = NULL) +
+  facet_wrap(~ site) +
+  labs(x = "CSF t-tau (pg/ml, log scale)", y = "Core score") +
+  theme(legend.position = "top")
+save_fig(p, "circularity.png", 9, 3.8)
+```
+
+```{r}
+#| label: fig-circ-berlin
+#| fig-cap: "Berlin: core score in controls with t-tau below 400 pg/ml, controls with t-tau in the AD range, and AD."
+#| fig-height: 3.5
+circ$berlin |>
+  ggplot(aes(tau_group, core_score, colour = tau_group)) +
+  geom_boxplot(outlier.shape = NA, width = 0.5) +
+  geom_jitter(width = 0.12, alpha = 0.6, size = 1.4) +
+  scale_colour_manual(values = c("control, normal tau" = "#2a78d6",
+                                 "control, high tau"   = "#1baf7a",
+                                 "AD"                  = "#eb6834"),
+                      guide = "none") +
+  labs(x = NULL, y = "Core score")
+```
+
+```{r}
+#| label: tbl-circ
+#| tbl-cap: "Association of the core score with the CSF biomarkers that define the diagnosis. Score estimates are in SD units; slopes are per doubling of t-tau. All models adjust for age and sex, and for site where more than one site is included."
+fmt_p <- function(p) format.pval(p, digits = 2, eps = 1e-4)
+ts <- circ$tau_score
+bt <- circ$beyond_tau
+bc <- circ$berlin_contrasts
+bp <- circ$berlin_position
+tibble(
+  Analysis = c("t-tau slope within AD",
+               "t-tau slope within controls",
+               "AD effect, unadjusted (3 sites)",
+               "AD effect, adjusted for t-tau (3 sites)",
+               "AD effect, adjusted for t-tau (Berlin)",
+               "Berlin: high-tau controls vs normal-tau controls",
+               "Berlin: high-tau controls, fraction of AD effect",
+               "Berlin AD: Spearman correlation with MMSE",
+               "t-tau + Aβ42 + site predicting the label (CV AUC)"),
+  n = c(ts$n, bt$n[1], bt$n, nrow(circ$berlin), nrow(circ$berlin),
+        circ$mmse$n, circ$biomarker_auc$n),
+  Estimate = c(sprintf("%.2f", ts$slope),
+               sprintf("%.2f", bt$ad_unadjusted[1]),
+               sprintf("%.2f", bt$ad_tau_adjusted),
+               sprintf("%.2f", bc$estimate[1]),
+               sprintf("%.2f (95%% CI %.2f–%.2f)", bp$fraction_of_ad, bp$ci_low, bp$ci_high),
+               sprintf("%.2f", circ$mmse$rho),
+               sprintf("%.2f (range %.2f–%.2f)", circ$biomarker_auc$auc_mean,
+                       circ$biomarker_auc$auc_min, circ$biomarker_auc$auc_max)),
+  p = c(fmt_p(ts$p), "", fmt_p(bt$p), fmt_p(bc$p[1]), "", fmt_p(circ$mmse$p), "")
+) |>
+  knitr::kable()
+```
+
+The core behaves as a continuous marker of neurodegeneration rather than of
+diagnosis. The score rises with t-tau within AD and within controls, with
+similar slopes, and individual core proteins track t-tau within each group
+(`r sum(circ$tau_protein$group == "AD" & circ$tau_protein$p_adj < 0.05)` of 50
+in AD, `r sum(circ$tau_protein$group == "control" & circ$tau_protein$p_adj < 0.05)`
+in controls; FDR < 5%). In Berlin, controls with t-tau in the AD range lie
+between controls with normal tau and AD, but they also have less tau than AD
+(median `r round(median(circ$berlin$t_tau[circ$berlin$tau_group == "control, high tau"]))`
+vs `r round(median(circ$berlin$t_tau[circ$berlin$tau_group == "AD"]))` pg/ml).
+Adjusting for t-tau reduces the AD effect on the score by
+`r round(100 * (1 - bt$ad_tau_adjusted[1] / bt$ad_unadjusted[1]))`%, to a
+non-significant value, and no core protein retains an AD effect at FDR < 5%.
+Since the label combines high tau with low amyloid, the tau-adjusted AD effect
+mainly reflects amyloid status: there is no evidence that the core tracks
+amyloid beyond tau, although the confidence interval does not exclude a small
+effect. Adjustment for a covariate measured with error tends to under-adjust,
+so the share explained by tau is, if anything, underestimated.
+
+Within AD in Berlin, a higher score goes with a lower MMSE, in the expected
+direction but with a single exploratory test (n = 33). The two biomarkers that
+define the label reconstruct it almost perfectly (AUC 0.98), above the proteome
+classifier (0.88): the classifier largely relearns tau-related
+neurodegeneration and is not evidence of diagnostic value beyond CSF tau and
+amyloid.
 
 ## Session information
 
