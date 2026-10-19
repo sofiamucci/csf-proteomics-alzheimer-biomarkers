@@ -5,7 +5,7 @@ data/processed/
 # Pipeline logs
 logs/
 
-# Rendered reports (published separately)
+# Rendered reports (copies in docs/ are published; see end of file)
 *.html
 *_files/
 .quarto/
