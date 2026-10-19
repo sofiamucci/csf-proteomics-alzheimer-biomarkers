@@ -175,14 +175,25 @@ Four sensitivity analyses were compared with the main model:
 Results are robust to blood contamination, normalization and the
 missing-value model. The plasma-protein score is lower in AD (−0.34, p = 6 × 10⁻⁴,
 adjusted for site, age and sex), and adjusting for it leaves 51 of the 259
-protein groups significant. Without a CSF/serum albumin quotient it cannot be
-determined whether the score is a confounder (barrier permeability) or lies on
-the disease pathway, so results are reported in two tiers: the main model, and
-a barrier-robust core significant in both models (45 higher, 6 lower in AD).
-Of the 67 protein groups lower in AD, 61 lose significance after the
-adjustment, so decreases are largely explained by the plasma-protein balance.
-The core is dominated by glycolytic enzymes, 14-3-3 proteins and established
-CSF markers of AD.
+protein groups significant. The score admits three readings that these data
+cannot separate: a confounder (blood–CSF barrier permeability; no CSF/serum
+albumin quotient is available), a mediator on the disease pathway, or a
+compositional effect of normalization, in which a rise of many brain-derived
+proteins lowers the relative share of plasma proteins. Consistent with the
+last, 67% of all protein groups correlate negatively with the score, 143 of the
+192 protein groups higher in AD have r < −0.3, the adjustment shrinks their
+fold changes by a median of 42%, and the score correlates with the core score
+defined below (ρ = −0.66). The per-run median renormalization does not test
+this, as it is also composition-based. Results are therefore reported in two
+tiers: the main model, and a barrier-robust core significant in both models,
+read as a conservative lower bound rather than as the specific signal. Of the
+67 protein groups lower in AD, 61 lose significance after the adjustment.
+
+The barrier-robust tier contains 51 protein groups; MAPT is flagged as circular
+and excluded from the core used downstream, leaving 50 (44 higher, 6 lower in
+AD). The core is dominated by glycolytic enzymes, 14-3-3 proteins and
+established CSF markers of AD, mostly cytosolic proteins whose presence in CSF
+most likely reflects release from damaged cells.
 
 `scripts/07_export_results.R` writes the full results table
 (`results/differential_abundance.csv`) with a column dictionary.
@@ -208,6 +219,43 @@ patients with other clinical diagnoses. The most stably selected predictors
 (YWHAZ, ALDOA and SPP1 in all 50 outer-fold models; YWHAG, GDA, PKM and SMOC1 in
 ≥ 90%) coincide with the barrier-robust core of the differential abundance
 analysis.
+
+## Circularity of the Diagnostic Label
+
+The biochemical classification requires high CSF tau and low amyloid; the
+amyloid measure and thresholds differ by site (in Sweden, Aβ42 alone separates
+the groups; in Magdeburg and Berlin it does not, consistent with use of the
+Aβ42/40 ratio). Every AD case has t-tau above 400 pg/ml, so proteins that rise
+with neurodegeneration are associated with the label by construction.
+`scripts/09_circularity.R` quantifies this using t-tau and Aβ42, the only
+biomarkers available at all three sites with AD cases (n = 181; p-tau is
+missing in Berlin, Aβ42/40 in Sweden, and Kiel has neither). The
+barrier-robust core without MAPT (50 protein groups) is summarised as a signed
+score (mean z-score, proteins lower in AD inverted).
+
+The score rises with log2 t-tau within AD (0.36 SD per doubling, p = 6 × 10⁻⁷)
+and within controls (0.32, p = 1 × 10⁻⁷), and about half of the core proteins
+do so individually in each group (FDR < 5%). Adjusting for log2 t-tau (with
+site, age and sex) reduces the AD effect on the score from 0.67 to 0.12 SD
+(p = 0.17), and no core protein retains an AD effect at FDR < 5%. Because the
+label combines high tau with low amyloid, the tau-adjusted effect mainly
+reflects amyloid status; there is no evidence that the core tracks amyloid
+beyond tau, although the confidence interval (−0.05 to 0.28) does not exclude a
+small effect. In Berlin, the 10 controls with t-tau in the AD range have an
+intermediate score (60% of the AD effect, bootstrap 95% CI 27–94%) but less
+tau than AD (median 466 vs 804 pg/ml); the tau-adjusted result is the same
+within Berlin. Within AD in Berlin, the score correlates with MMSE
+(ρ = −0.35, p = 0.046; n = 33, exploratory). A logistic model of t-tau, Aβ42
+and site predicts the label with a cross-validated AUC of 0.98, above the
+proteome classifier (0.88).
+
+The core is therefore interpreted as a neuronal injury signature that tracks
+CSF t-tau, not as an AD-specific signal. Three alternatives were considered and
+not used: adjustment for p-tau (unavailable in Berlin), comparison of the
+proteome with biomarkers for predicting the label (uninformative, since the
+biomarkers define it), and validation against the clinical diagnosis (missing
+in Sweden; clinical AD is a subset of biochemical AD and the two disagree in
+only 10 individuals).
 
 ## Reproducibility
 

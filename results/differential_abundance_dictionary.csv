@@ -2,6 +2,7 @@ column,description
 protein_group,Spectronaut protein group (UniProt accessions)
 gene,Gene name(s) of the protein group
 tier,barrier-robust: FDR < 5% in the main and plasma-adjusted models; main model only: FDR < 5% in the main model only; not significant
+circular,TRUE for MAPT: associated with diagnosis by definition (CSF tau); excluded from the barrier-robust core in downstream analyses
 direction,Sign of log2FC (AD relative to control)
 log2FC,"Main model (proDA, ~ group + site + age + sex): log2 fold change, AD vs control"
 se,Standard error of log2FC

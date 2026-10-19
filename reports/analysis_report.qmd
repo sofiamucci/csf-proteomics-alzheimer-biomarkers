@@ -179,10 +179,18 @@ after renormalization (the renormalized list differs only near the FDR
 threshold, as all fold changes shift by the small diagnosis-associated offset
 seen in QC). Limma with sample weights recovers the same effects with more
 power. Adjusting for the plasma-protein score, which is lower in AD, reduces
-the significant set to a core of protein groups. Whether the score acts as a
-confounder (barrier permeability) or a mediator of disease effects cannot be
-resolved without the CSF/serum albumin quotient, which is not available; both
-tiers are therefore reported.
+the significant set to a core of protein groups. The score admits three
+readings that these data cannot separate: a confounder (blood–CSF barrier
+permeability), a mediator of disease effects, or a compositional effect of
+normalization. On the last reading, when many brain-derived proteins rise, the
+relative share of plasma proteins falls; consistent with it,
+`r round(100 * mean(res$r_plasma < 0, na.rm = TRUE))`% of all protein groups
+correlate negatively with the score, and the plasma adjustment shrinks the fold
+change of proteins higher in AD by a median of
+`r up <- filter(res, tier != "not significant", direction == "higher in AD"); round(100 * median(1 - up$log2FC_plasma_adjusted / up$log2FC))`%.
+Adjusting for the score may then remove part of the disease signal. Both tiers
+are reported, and the barrier-robust core is read as a conservative lower
+bound, not as the specific signal.
 
 ```{r}
 #| label: tbl-tier-direction
@@ -198,19 +206,19 @@ res |>
 
 Of the 67 protein groups lower in AD, 61 lose significance after the plasma
 adjustment, whereas most of those higher in AD remain. Lower levels in AD are
-largely explained by the plasma-protein balance; the most specific signal is
-the release of brain-derived proteins.
+largely explained by the plasma-protein balance, which may itself partly
+reflect the rise of brain-derived proteins.
 
 ### Barrier-robust core
 
 ```{r}
 #| label: fig-heatmap
-#| fig-cap: "Barrier-robust protein groups: z-scored log2 intensities per run (grey: missing), runs ordered by diagnosis and site, protein groups ordered by log2 fold change."
+#| fig-cap: "Barrier-robust protein groups, excluding MAPT (circular): z-scored log2 intensities per run (grey: missing), runs ordered by diagnosis and site, protein groups ordered by log2 fold change."
 #| fig-width: 9
 #| fig-height: 8
 filt <- readRDS(here::here("data/processed/04_filter.rds"))
 keep <- !filt$sample$excluded
-core <- filter(res, tier == "barrier-robust") |> arrange(log2FC)
+core <- filter(res, tier == "barrier-robust", !circular) |> arrange(log2FC)
 
 Z <- log2(filt$intensity[core$protein_group, keep])
 Z <- t(scale(t(Z)))
@@ -235,10 +243,13 @@ p <- as_tibble(Z, rownames = "protein_group") |>
 save_fig(p, "heatmap_core.png", 9, 8)
 ```
 
-The core is dominated by glycolytic enzymes (ALDOA, ALDOC, PKM, LDHA, GPI,
-ENO2, PGK1), 14-3-3 proteins (YWHAZ, YWHAG, YWHAE) and established CSF markers
-of AD (MAPT, SOD1, UCHL1, SMOC1, SPP1, FABP3), mostly intracellular proteins
-higher in AD. The glycolytic signature replicates the original report.
+The core (`r nrow(core)` protein groups; MAPT is excluded because diagnosis is
+defined from CSF tau) is dominated by glycolytic enzymes (ALDOA, ALDOC, PKM,
+LDHA, GPI, ENO2, PGK1), 14-3-3 proteins (YWHAZ, YWHAG, YWHAE) and established
+CSF markers of AD (SOD1, UCHL1, SMOC1, SPP1, FABP3), mostly cytosolic proteins
+higher in AD. Glycolytic enzymes in CSF most likely indicate release from
+damaged cells rather than a change in metabolism. The glycolytic signature
+was also reported in the original study.
 
 ## Diagnostic classifier
 

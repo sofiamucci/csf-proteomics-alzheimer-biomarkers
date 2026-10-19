@@ -12,6 +12,7 @@ library(readr)
 in_rds  <- "data/processed/06_differential_abundance.rds"
 out_dir <- "results"
 FDR     <- 0.05
+CIRCULAR_PATTERN <- "(^|;)MAPT(;|$)"   # diagnosis is defined from CSF tau
 
 da <- readRDS(in_rds)
 s  <- da$sensitivity
@@ -31,10 +32,11 @@ out <- da$results |>
     significant & p_adj_plasma_adjusted < FDR ~ "barrier-robust",
     significant                               ~ "main model only",
     .default                                  = "not significant"
-  )) |>
+  ),
+  circular = grepl(CIRCULAR_PATTERN, gene)) |>
   arrange(p_adj) |>
   transmute(
-    protein_group = protein, gene, tier, direction,
+    protein_group = protein, gene, tier, circular, direction,
     log2FC = logFC, se, p_value = p, p_adj,
     log2FC_plasma_adjusted, p_adj_plasma_adjusted,
     log2FC_limma_arrayweights, p_adj_limma_arrayweights,
@@ -48,6 +50,7 @@ dictionary <- tribble(
   "protein_group",             "Spectronaut protein group (UniProt accessions)",
   "gene",                      "Gene name(s) of the protein group",
   "tier",                      "barrier-robust: FDR < 5% in the main and plasma-adjusted models; main model only: FDR < 5% in the main model only; not significant",
+  "circular",                  "TRUE for MAPT: associated with diagnosis by definition (CSF tau); excluded from the barrier-robust core in downstream analyses",
   "direction",                 "Sign of log2FC (AD relative to control)",
   "log2FC",                    "Main model (proDA, ~ group + site + age + sex): log2 fold change, AD vs control",
   "se",                        "Standard error of log2FC",
@@ -73,7 +76,8 @@ dictionary <- tribble(
 stopifnot(
   identical(sort(names(out)), sort(dictionary$column)),
   sum(out$tier != "not significant") == sum(da$results$significant),
-  !anyDuplicated(out$protein_group)
+  !anyDuplicated(out$protein_group),
+  sum(out$circular, na.rm = TRUE) == 1L
 )
 
 print(count(out, tier, direction))
