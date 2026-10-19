@@ -4,4 +4,3 @@ channels:
 dependencies:
   - r-base=4.6.1
 
-prefix: "/home/sofimu/miniforge3/envs/csf-proteomics"
